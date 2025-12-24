@@ -1,18 +1,46 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
-import UserRegistrationTicketsPage from './pages/UserRegistrationTicketsPage'
-import AreaRegistrationTicketsPage from './pages/AreaRegistrationTicketsPage'
+import SiteRegistrationsPage from './pages/SiteRegistrationsPage'
+import ProtectedRoute from './components/ProtectedRoute'
+import { authUtils } from './utils/auth'
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<LoginPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/dashboard/user-registrations" element={<UserRegistrationTicketsPage />} />
-        <Route path="/dashboard/area-registrations" element={<AreaRegistrationTicketsPage />} />
+        {/* Public Routes */}
+        <Route 
+          path="/login" 
+          element={
+            authUtils.isAuthenticated() ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <LoginPage />
+            )
+          } 
+        />
+        
+        {/* Protected Routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/site-registrations"
+          element={
+            <ProtectedRoute>
+              <SiteRegistrationsPage />
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* Default redirect */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   )

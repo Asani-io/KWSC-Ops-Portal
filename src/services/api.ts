@@ -1,4 +1,5 @@
 import { API_BASE_URL, API_ENDPOINTS } from '../config/api'
+import { authUtils } from '../utils/auth'
 
 // Types
 export interface LoginRequest {
@@ -21,6 +22,64 @@ export interface LoginResponse {
   }
 }
 
+export interface DashboardMetrics {
+  success: boolean
+  data: {
+    pendingReviews: number
+    assignedReviews: number
+    pendingTickets: number
+    resolvedToday: number
+    totalUsers: number
+    activeUsers: number
+  }
+}
+
+export interface RecentActivity {
+  success: boolean
+  data: Array<{
+    type: string
+    message: string
+    siteId?: string
+    createdAt: string
+  }>
+}
+
+export interface PendingReviews {
+  success: boolean
+  data: Array<{
+    id: string
+    siteId: string
+    status: string
+    priority: string
+    createdAt: string
+    site: {
+      id: string
+      houseNo: string
+      street: string
+      area: { id: number; name: string }
+      block: { id: number; name: string }
+    }
+    currentAssigneeEmployeeId?: string
+  }>
+}
+
+export interface ReviewDetails {
+  success: boolean
+  data: any // Will be properly typed based on API response
+}
+
+export interface ReviewActionResponse {
+  success: boolean
+  data: {
+    id: string
+    status: string
+    site?: {
+      id: string
+      status: string
+    }
+  }
+}
+
 export interface ApiError {
   success: false
   error: string
@@ -37,16 +96,27 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    requireAuth: boolean = false
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`
     
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    }
+
+    // Add authorization token if required
+    if (requireAuth) {
+      const token = authUtils.getToken()
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+    }
+    
     const config: RequestInit = {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
     }
 
     try {
@@ -76,7 +146,12 @@ class ApiClient {
       if (!response.ok) {
         // Handle error response
         const errorMessage = data.message || data.error || `HTTP ${response.status}: ${response.statusText}`
-        console.error('API Error:', errorMessage)
+        
+        // Don't log 404 errors to console - they're expected in some cases
+        if (response.status !== 404) {
+          console.error('API Error:', errorMessage)
+        }
+        
         throw new Error(errorMessage)
       }
 
@@ -102,6 +177,124 @@ class ApiClient {
       body: JSON.stringify(credentials),
       credentials: 'include', // Include cookies if needed
     })
+  }
+
+  // Dashboard Metrics API
+  async getDashboardMetrics(): Promise<DashboardMetrics> {
+    return this.request<DashboardMetrics>(
+      API_ENDPOINTS.DASHBOARD_METRICS,
+      {
+        method: 'GET',
+      },
+      true // Require authentication
+    )
+  }
+
+  // Recent Activity API
+  async getRecentActivity(limit: number = 20): Promise<RecentActivity> {
+    return this.request<RecentActivity>(
+      `${API_ENDPOINTS.DASHBOARD_RECENT_ACTIVITY}?limit=${limit}`,
+      {
+        method: 'GET',
+      },
+      true // Require authentication
+    )
+  }
+
+  // Get Pending Reviews API (Reviewer Module)
+  async getPendingReviews(): Promise<PendingReviews> {
+    return this.request<PendingReviews>(
+      API_ENDPOINTS.PENDING_REVIEWS,
+      {
+        method: 'GET',
+      },
+      true // Require authentication
+    )
+  }
+
+  // Get Review Details API (Reviewer Module)
+  async getReviewDetails(reviewId: string): Promise<ReviewDetails> {
+    return this.request<ReviewDetails>(
+      `${API_ENDPOINTS.REVIEW_DETAILS}/${reviewId}`,
+      {
+        method: 'GET',
+      },
+      true // Require authentication
+    )
+  }
+
+  // Approve Review API (Reviewer Module)
+  async approveReview(reviewId: string, notes: string = ''): Promise<ReviewActionResponse> {
+    return this.request<ReviewActionResponse>(
+      `${API_ENDPOINTS.REVIEW_ACTION}/${reviewId}/action`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'approve',
+          notes: notes || 'Site approved by reviewer',
+        }),
+      },
+      true // Require authentication
+    )
+  }
+
+  // Reject Review API (Reviewer Module)
+  async rejectReview(reviewId: string, notes: string): Promise<ReviewActionResponse> {
+    return this.request<ReviewActionResponse>(
+      `${API_ENDPOINTS.REVIEW_ACTION}/${reviewId}/action`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'reject',
+          notes: notes,
+        }),
+      },
+      true // Require authentication
+    )
+  }
+
+  // Update Site Details API (Reviewer Module)
+  async updateSiteDetails(siteId: string, updates: {
+    areaId?: number
+    blockId?: number
+    houseNo?: string
+    street?: string
+    nearestLandmark?: string
+    additionalDirections?: string
+    pinLat?: number
+    pinLng?: number
+    pinAccuracyM?: number
+  }): Promise<any> {
+    return this.request<any>(
+      `${API_ENDPOINTS.UPDATE_SITE_DETAILS}/${siteId}/update-details`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      },
+      true // Require authentication
+    )
+  }
+
+  // Get All Areas API
+  async getAllAreas(): Promise<any> {
+    return this.request<any>(
+      API_ENDPOINTS.GET_AREAS,
+      {
+        method: 'GET',
+      },
+      true // Require authentication
+    )
+  }
+
+  // Get Blocks by Area API
+  async getBlocksByArea(areaId: number): Promise<any> {
+    return this.request<any>(
+      `${API_ENDPOINTS.GET_BLOCKS_BY_AREA}/${areaId}/blocks`,
+      {
+        method: 'GET',
+      },
+      true // Require authentication
+    )
   }
 }
 
