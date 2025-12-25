@@ -49,34 +49,92 @@ export interface PendingReviews {
   data: Array<{
     id: string
     siteId: string
-    status: string
-    priority: string
+    status: 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED'
+    priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
     createdAt: string
-    site: {
-      id: string
-      houseNo: string
-      street: string
-      area: { id: number; name: string }
-      block: { id: number; name: string }
-    }
-    currentAssigneeEmployeeId?: string
+    reviewType: 'MANUAL_VERIFICATION' | 'NEW_SITE_VERIFICATION'
+    existingSiteId?: string | null
+    createdByUserName: string
+    fullAddress: string
   }>
 }
 
 export interface ReviewDetails {
   success: boolean
-  data: any // Will be properly typed based on API response
+  data: {
+    id: string
+    siteId: string
+    fullAddress: string
+    status: 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED'
+    priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
+    createdAt: string
+    createdByUserName: string
+    createdByConsumerNo?: string | null
+    createdByUserType: string
+    site: {
+      areaId: number
+      areaName: string
+      blockId: number
+      blockName: string
+      houseNo?: string
+      street?: string
+      nearestLandmark?: string
+      additionalDirections?: string
+      pinLat?: number
+      pinLng?: number
+      pinAccuracyM?: number
+      pinCapturedAt?: string
+      plotKey?: string
+    }
+    documents: Array<{
+      id: string
+      imageData: string | null // Base64 format: "data:image/png;base64,..."
+    }>
+  }
 }
 
 export interface ReviewActionResponse {
   success: boolean
   data: {
+    status: 'APPROVED' | 'REJECTED'
+  }
+}
+
+export interface UpdateSiteDetailsRequest {
+  areaId?: number
+  blockId?: number
+  houseNo?: string
+  street?: string
+  nearestLandmark?: string
+  additionalDirections?: string
+  pinLat?: number
+  pinLng?: number
+  pinAccuracyM?: number
+}
+
+export interface UpdateSiteDetailsResponse {
+  success: boolean
+  data: {
     id: string
-    status: string
-    site?: {
-      id: string
-      status: string
+    areaId: number
+    blockId: number
+    houseNo?: string
+    street?: string
+    nearestLandmark?: string
+    additionalDirections?: string
+    pinLat?: number
+    pinLng?: number
+    pinAccuracyM?: number
+    area: {
+      id: number
+      name: string
     }
+    block: {
+      id: number
+      name: string
+    }
+    status: string
+    updatedAt: string
   }
 }
 
@@ -101,9 +159,27 @@ class ApiClient {
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`
     
-    const headers: HeadersInit = {
+    // Build headers as a plain object
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
+    }
+
+    // Convert options.headers to plain object if it exists
+    if (options.headers) {
+      if (options.headers instanceof Headers) {
+        // If it's a Headers object, convert to plain object
+        options.headers.forEach((value, key) => {
+          headers[key] = value
+        })
+      } else if (Array.isArray(options.headers)) {
+        // If it's an array of tuples, convert to plain object
+        options.headers.forEach(([key, value]) => {
+          headers[key] = value
+        })
+      } else {
+        // If it's already a plain object, spread it
+        Object.assign(headers, options.headers)
+      }
     }
 
     // Add authorization token if required
@@ -201,6 +277,17 @@ class ApiClient {
     )
   }
 
+  // Get Reviewer Overview API
+  async getReviewerOverview(): Promise<any> {
+    return this.request<any>(
+      API_ENDPOINTS.REVIEWER_OVERVIEW,
+      {
+        method: 'GET',
+      },
+      true // Require authentication
+    )
+  }
+
   // Get Pending Reviews API (Reviewer Module)
   async getPendingReviews(): Promise<PendingReviews> {
     return this.request<PendingReviews>(
@@ -254,18 +341,8 @@ class ApiClient {
   }
 
   // Update Site Details API (Reviewer Module)
-  async updateSiteDetails(siteId: string, updates: {
-    areaId?: number
-    blockId?: number
-    houseNo?: string
-    street?: string
-    nearestLandmark?: string
-    additionalDirections?: string
-    pinLat?: number
-    pinLng?: number
-    pinAccuracyM?: number
-  }): Promise<any> {
-    return this.request<any>(
+  async updateSiteDetails(siteId: string, updates: UpdateSiteDetailsRequest): Promise<UpdateSiteDetailsResponse> {
+    return this.request<UpdateSiteDetailsResponse>(
       `${API_ENDPOINTS.UPDATE_SITE_DETAILS}/${siteId}/update-details`,
       {
         method: 'PUT',
@@ -295,6 +372,43 @@ class ApiClient {
       },
       true // Require authentication
     )
+  }
+
+  // Logout API - Silently handles errors since we always want to clear local auth
+  async logout(): Promise<{ success: boolean }> {
+    const url = `${this.baseURL}${API_ENDPOINTS.LOGOUT}`
+    const token = authUtils.getToken()
+    
+    try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      }
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+      })
+      
+      // Try to parse response, but don't throw errors
+      if (response.ok) {
+        try {
+          const data = await response.json()
+          return data as { success: boolean }
+        } catch {
+          return { success: true }
+        }
+      } else {
+        // Even if response is not ok, return success: false but don't throw
+        return { success: false }
+      }
+    } catch (error) {
+      // Silently handle any errors - we'll still clear local auth
+      return { success: false }
+    }
   }
 }
 

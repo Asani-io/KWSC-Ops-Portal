@@ -14,7 +14,7 @@ export default function DashboardPage() {
     totalUsers: 0,
     activeUsers: 0,
   })
-  const [recentActivity, setRecentActivity] = useState<Array<{
+  const [, setRecentActivity] = useState<Array<{
     type: string
     message: string
     siteId?: string
@@ -84,15 +84,15 @@ export default function DashboardPage() {
     }
   }, [])
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-PK', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
+  // const formatDate = (dateString: string) => {
+  //   return new Date(dateString).toLocaleString('en-PK', {
+  //     year: 'numeric',
+  //     month: 'short',
+  //     day: 'numeric',
+  //     hour: '2-digit',
+  //     minute: '2-digit',
+  //   })
+  // }
 
   const user = authUtils.getUser()
 
@@ -113,17 +113,25 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-          ) : (
-            <>
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {isLoading ? (
+              // Skeleton Cards
+              Array.from({ length: 5 }).map((_, index) => (
+                <div key={`skeleton-card-${index}`} className="bg-white rounded-2xl p-6 shadow-soft">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="h-4 bg-gray-200 rounded animate-pulse mb-3 w-24"></div>
+                      <div className="h-8 bg-gray-200 rounded animate-pulse w-16"></div>
+                    </div>
+                    <div className="bg-gray-100 rounded-full p-3">
+                      <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <>
                 <StatsCard
                   title="Pending Reviews"
                   value={metrics.pendingReviews}
@@ -135,18 +143,6 @@ export default function DashboardPage() {
                   iconBgColor="bg-blue-100"
                   iconColor="text-blue-600"
                 />
-
-                {/* <StatsCard
-                  title="Assigned Reviews"
-                  value={metrics.assignedReviews}
-                  icon={
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                  }
-                  iconBgColor="bg-green-100"
-                  iconColor="text-green-600"
-                /> */}
 
                 <StatsCard
                   title="Pending Tickets"
@@ -195,29 +191,49 @@ export default function DashboardPage() {
                   iconBgColor="bg-green-100"
                   iconColor="text-green-600"
                 />
-              </div>
+              </>
+            )}
+          </div>
 
-              {/* Recent Activity */}
-              {recentActivity.length > 0 && (
-                <div className="bg-white rounded-lg shadow-soft p-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
-                  <div className="space-y-3">
-                    {recentActivity.map((activity, index) => (
-                      <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                        <div className="flex-shrink-0 mt-1">
-                          <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm text-gray-900">{activity.message}</p>
-                          <p className="text-xs text-gray-500 mt-1">{formatDate(activity.createdAt)}</p>
-                        </div>
-                      </div>
-                    ))}
+          {/* Recent Activity */}
+          {/* {isLoading ? (
+            // Skeleton Recent Activity
+            <div className="bg-white rounded-lg shadow-soft p-6">
+              <div className="h-6 bg-gray-200 rounded animate-pulse mb-4 w-40"></div>
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div key={`skeleton-activity-${index}`} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-shrink-0 mt-1">
+                      <div className="w-2 h-2 bg-gray-200 rounded-full animate-pulse"></div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="h-4 bg-gray-200 rounded animate-pulse mb-2 w-full"></div>
+                      <div className="h-3 bg-gray-200 rounded animate-pulse w-32"></div>
+                    </div>
                   </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            recentActivity.length > 0 && (
+              <div className="bg-white rounded-lg shadow-soft p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
+                <div className="space-y-3">
+                  {recentActivity.map((activity, index) => (
+                    <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex-shrink-0 mt-1">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-900">{activity.message}</p>
+                        <p className="text-xs text-gray-500 mt-1">{formatDate(activity.createdAt)}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </>
-          )}
+              </div>
+            )
+          )} */}
         </div>
       </DashboardLayout>
     </Page>

@@ -13,7 +13,6 @@ export default function StatsCard({
   value,
   icon,
   iconBgColor = 'bg-blue-100',
-  iconColor = 'text-blue-600',
 }: StatsCardProps) {
   return (
     <div className="bg-white rounded-2xl p-6 shadow-soft">

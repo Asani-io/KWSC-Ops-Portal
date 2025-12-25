@@ -8,76 +8,54 @@ import RejectModal from '../components/RejectModal'
 import { apiClient } from '../services/api'
 import { authUtils } from '../utils/auth'
 
-interface SiteReview {
-  id?: string
-  reviewId?: string  // API sometimes returns reviewId instead of id
+// Simplified interface for pending reviews (from getPendingReviews API)
+interface PendingReview {
+  id: string
   siteId: string
   status: 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED'
   priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
   createdAt: string
+  reviewType: string
+  existingSiteId?: string | null
+  createdByUserName: string
+  fullAddress: string
+}
+
+// Detailed interface for review details (from getReviewDetails API)
+interface SiteReviewDetail {
+  id: string
+  siteId: string
+  fullAddress: string
+  status: 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED'
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
+  createdAt: string
+  createdByUserName: string
+  createdByConsumerNo?: string | null
+  createdByUserType: string
   site: {
-    id: string
-    houseNo: string
-    street: string
+    areaId: number
+    areaName: string
+    blockId: number
+    blockName: string
+    houseNo?: string
+    street?: string
     nearestLandmark?: string
     additionalDirections?: string
     pinLat?: number
     pinLng?: number
     pinAccuracyM?: number
     pinCapturedAt?: string
-    area: { id: number; name: string }
-    block: { id: number; name: string }
-    documents?: Array<{
-      id: string
-      type: string
-      fileUri: string
-      uploadedBy?: { id: string; firstName: string; lastName?: string }
-      uploadedAt?: string
-    }>
-    memberships?: Array<{
-      id: string
-      role?: string
-      isActive: boolean
-      user: {
-        id: string
-        firstName: string
-        lastName: string
-        email: string
-        primaryPhone: string
-        cnic?: string
-        documents?: Array<{
-          id: string
-          type: string
-          fileUri: string
-        }>
-      }
-    }>
-    createdBy?: {
-      id: string
-      firstName: string
-      lastName: string
-      email: string
-      primaryPhone?: string
-    }
+    plotKey?: string
   }
-  currentAssigneeEmployeeId?: string
-  assignee?: {
+  documents: Array<{
     id: string
-    fullName: string
-  }
-  events?: Array<{
-    id: string
-    action: string
-    fromStatus: string | null
-    toStatus: string
-    note: string
-    createdAt: string
+    imageData: string | null // Base64 format
   }>
 }
 
 export default function SiteRegistrationsPage() {
-  const [reviews, setReviews] = useState<SiteReview[]>([])
-  const [selectedReview, setSelectedReview] = useState<SiteReview | null>(null)
+  const [reviews, setReviews] = useState<PendingReview[]>([])
+  const [selectedReview, setSelectedReview] = useState<SiteReviewDetail | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [rejectReviewId, setRejectReviewId] = useState<string | null>(null)
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false)
@@ -88,6 +66,12 @@ export default function SiteRegistrationsPage() {
   const [editedData, setEditedData] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const fetchingRef = useRef(false)
+
+  // Areas and Blocks state for dropdowns
+  const [areas, setAreas] = useState<Array<{ id: number; name: string }>>([])
+  const [blocks, setBlocks] = useState<Array<{ id: number; name: string; areaId: number }>>([])
+  const [isLoadingAreas, setIsLoadingAreas] = useState(false)
+  const [isLoadingBlocks, setIsLoadingBlocks] = useState(false)
 
   useEffect(() => {
     if (fetchingRef.current) return
@@ -105,12 +89,7 @@ export default function SiteRegistrationsPage() {
         if (isCancelled) return
 
         if (response.success && response.data) {
-          // Normalize reviews - ensure all have id (use reviewId if id is missing)
-          const normalizedReviews = response.data.map((review: any) => ({
-            ...review,
-            id: review.id || review.reviewId,
-          }))
-          setReviews(normalizedReviews)
+          setReviews(response.data)
         }
       } catch (err) {
         if (isCancelled) return
@@ -145,12 +124,7 @@ export default function SiteRegistrationsPage() {
       // Refresh the list
       const response = await apiClient.getPendingReviews()
       if (response.success && response.data) {
-        // Normalize reviews - ensure all have id (use reviewId if id is missing)
-        const normalizedReviews = response.data.map((review: any) => ({
-          ...review,
-          id: review.id || review.reviewId,
-        }))
-        setReviews(normalizedReviews)
+        setReviews(response.data)
       }
       if (isModalOpen) {
         closeModal()
@@ -168,25 +142,19 @@ export default function SiteRegistrationsPage() {
   }
 
   const handleRejectConfirm = async (reason: string) => {
-        if (rejectReviewId) {
-          try {
-            await apiClient.rejectReview(rejectReviewId, reason)
-            // Refresh the list
-            const response = await apiClient.getPendingReviews()
-            if (response.success && response.data) {
-              // Normalize reviews - ensure all have id (use reviewId if id is missing)
-              const normalizedReviews = response.data.map((review: any) => ({
-                ...review,
-                id: review.id || review.reviewId,
-              }))
-              setReviews(normalizedReviews)
-            }
-            setIsRejectModalOpen(false)
-            setRejectReviewId(null)
-            const selectedReviewId = selectedReview?.id || selectedReview?.reviewId
-            if (isModalOpen && selectedReviewId === rejectReviewId) {
-              closeModal()
-            }
+    if (rejectReviewId) {
+      try {
+        await apiClient.rejectReview(rejectReviewId, reason)
+        // Refresh the list
+        const response = await apiClient.getPendingReviews()
+        if (response.success && response.data) {
+          setReviews(response.data)
+        }
+        setIsRejectModalOpen(false)
+        setRejectReviewId(null)
+        if (isModalOpen && selectedReview?.id === rejectReviewId) {
+          closeModal()
+        }
       } catch (err) {
         if (err instanceof Error) {
           setError(err.message)
@@ -195,50 +163,41 @@ export default function SiteRegistrationsPage() {
     }
   }
 
-  const handleRowClick = async (review: SiteReview) => {
-    // Normalize review ID - API may return reviewId instead of id
-    const reviewId = review.id || review.reviewId
-    
+  const handleRowClick = async (review: PendingReview) => {
     // Check if review has an id
-    if (!review || !reviewId) {
+    if (!review || !review.id) {
       console.error('Review object missing id:', review)
       return
     }
 
-    // Normalize the review object to always have id
-    const normalizedReview = { ...review, id: reviewId }
-
-    // First, show the data we already have from the list
-    setSelectedReview(normalizedReview as any)
+    // Open modal immediately with basic data
+    setIsModalOpen(true)
+    setIsLoadingDetails(true)
+    setError(null)
     setEditedData(null)
     setIsEditMode(false)
-    setIsModalOpen(true)
-    setError(null)
-    
-    // Then try to fetch full details in the background
-    setIsLoadingDetails(true)
+
     try {
-      const response = await apiClient.getReviewDetails(reviewId)
-      if (response.success && response.data) {
-        // Update with full details if available
-        setSelectedReview(response.data as any)
+      // Fetch full review details
+      const detailsResponse = await apiClient.getReviewDetails(review.id)
+
+      if (detailsResponse.success && detailsResponse.data) {
+        setSelectedReview(detailsResponse.data)
+      } else {
+        setError('Failed to load review details')
       }
     } catch (err) {
-      // Silently handle "not found" errors - this is expected for some reviews
-      // Only show error if it's not a "not found" or 404 error
       if (err instanceof Error) {
-        const isNotFoundError = 
-          err.message.toLowerCase().includes('not found') ||
-          err.message.toLowerCase().includes('404') ||
-          err.message.toLowerCase().includes('review case not found')
-        
-        if (!isNotFoundError) {
-          // Only show non-404 errors
-          console.warn('Could not load full details:', err.message)
+        setError(err.message)
+        // If it's a 404 or "not found" error, don't show it as critical
+        if (err.message.includes('not found') || err.message.includes('404')) {
+          console.warn('Review details not found:', err.message)
+        } else {
+          console.error('Failed to fetch review details:', err)
         }
-        // Don't set error state for "not found" - it's expected
+      } else {
+        setError('Failed to load review details')
       }
-      // Keep showing the basic data we have
     } finally {
       setIsLoadingDetails(false)
     }
@@ -249,19 +208,66 @@ export default function SiteRegistrationsPage() {
     setSelectedReview(null)
     setEditedData(null)
     setIsEditMode(false)
+    setAreas([])
+    setBlocks([])
   }
 
-  const handleEditClick = () => {
+  const handleEditClick = async () => {
     if (selectedReview) {
-      // Create a deep copy for editing
-      setEditedData(JSON.parse(JSON.stringify(selectedReview)))
+      // Fetch all areas for dropdown first
+      setIsLoadingAreas(true)
+      try {
+        const areasResponse = await apiClient.getAllAreas()
+        if (areasResponse.success && areasResponse.data?.areas) {
+          setAreas(areasResponse.data.areas)
+        }
+      } catch (err) {
+        console.error('Failed to fetch areas:', err)
+        setError('Failed to load areas. Please try again.')
+        setIsLoadingAreas(false)
+        return
+      } finally {
+        setIsLoadingAreas(false)
+      }
+
+      // Fetch blocks for the current area
+      if (selectedReview.site?.areaId) {
+        await fetchBlocksForArea(selectedReview.site.areaId)
+      }
+
+      // Create a deep copy for editing - convert areaName/blockName structure to area/block objects for compatibility
+      const copy = JSON.parse(JSON.stringify(selectedReview))
+      // Convert to editable format with area and block objects
+      if (copy.site) {
+        copy.site.area = { id: selectedReview.site.areaId, name: selectedReview.site.areaName }
+        copy.site.block = { id: selectedReview.site.blockId, name: selectedReview.site.blockName }
+      }
+      setEditedData(copy)
       setIsEditMode(true)
+    }
+  }
+
+  const fetchBlocksForArea = async (areaId: number) => {
+    setIsLoadingBlocks(true)
+    try {
+      const blocksResponse = await apiClient.getBlocksByArea(areaId)
+      if (blocksResponse.success && blocksResponse.data?.blocks) {
+        setBlocks(blocksResponse.data.blocks)
+      }
+    } catch (err) {
+      console.error('Failed to fetch blocks:', err)
+      setError('Failed to load blocks. Please try again.')
+      setBlocks([])
+    } finally {
+      setIsLoadingBlocks(false)
     }
   }
 
   const handleCancelEdit = () => {
     setEditedData(null)
     setIsEditMode(false)
+    setAreas([])
+    setBlocks([])
   }
 
   const handleSave = async () => {
@@ -271,66 +277,66 @@ export default function SiteRegistrationsPage() {
     setError(null)
 
     try {
-      // Prepare update data
+      // Prepare update data - only Area and Block can be edited
       const updateData: any = {}
-      
-      if (editedData.site.houseNo !== selectedReview.site?.houseNo) {
-        updateData.houseNo = editedData.site.houseNo
+
+      // Check if Area ID changed
+      const areaIdChanged = editedData.site.area?.id !== selectedReview.site?.areaId
+      if (areaIdChanged && editedData.site.area?.id) {
+        updateData.areaId = editedData.site.area.id
+        console.log('Area changed:', {
+          old: selectedReview.site?.areaId,
+          new: editedData.site.area.id
+        })
       }
-      if (editedData.site.street !== selectedReview.site?.street) {
-        updateData.street = editedData.site.street
-      }
-      if (editedData.site.area?.id !== selectedReview.site?.area?.id) {
-        updateData.areaId = editedData.site.area?.id
-      }
-      if (editedData.site.block?.id !== selectedReview.site?.block?.id) {
-        updateData.blockId = editedData.site.block?.id
-      }
-      if (editedData.site.nearestLandmark !== selectedReview.site?.nearestLandmark) {
-        updateData.nearestLandmark = editedData.site.nearestLandmark
-      }
-      if (editedData.site.additionalDirections !== selectedReview.site?.additionalDirections) {
-        updateData.additionalDirections = editedData.site.additionalDirections
-      }
-      if (editedData.site.pinLat !== selectedReview.site?.pinLat) {
-        updateData.pinLat = editedData.site.pinLat
-      }
-      if (editedData.site.pinLng !== selectedReview.site?.pinLng) {
-        updateData.pinLng = editedData.site.pinLng
-      }
-      if (editedData.site.pinAccuracyM !== selectedReview.site?.pinAccuracyM) {
-        updateData.pinAccuracyM = editedData.site.pinAccuracyM
+
+      // Check if Block ID changed
+      const blockIdChanged = editedData.site.block?.id !== selectedReview.site?.blockId
+      if (blockIdChanged && editedData.site.block?.id) {
+        updateData.blockId = editedData.site.block.id
+        console.log('Block changed:', {
+          old: selectedReview.site?.blockId,
+          new: editedData.site.block.id
+        })
       }
 
       // Call update API if there are changes
       if (Object.keys(updateData).length > 0 && selectedReview.siteId) {
+        console.log('Calling updateSiteDetails with:', updateData, 'for siteId:', selectedReview.siteId)
         await apiClient.updateSiteDetails(selectedReview.siteId, updateData)
+      } else {
+        console.warn('No changes detected or missing siteId. updateData:', updateData, 'siteId:', selectedReview.siteId)
+        // If no changes, just close edit mode
+        setIsEditMode(false)
+        setEditedData(null)
+        setAreas([])
+        setBlocks([])
+        setIsSaving(false)
+        return
       }
 
-      // Get the review ID (normalized)
-      const reviewId = selectedReview.id || selectedReview.reviewId
-      
-      // Refresh review details to get updated data
-      if (reviewId) {
-        const detailsResponse = await apiClient.getReviewDetails(reviewId)
-        if (detailsResponse.success && detailsResponse.data) {
-          setSelectedReview(detailsResponse.data as any)
+      // Refresh the review details to get updated data
+      if (selectedReview.id) {
+        try {
+          const detailsResponse = await apiClient.getReviewDetails(selectedReview.id)
+          if (detailsResponse.success && detailsResponse.data) {
+            setSelectedReview(detailsResponse.data)
+          }
+        } catch (err) {
+          console.error('Failed to refresh review details:', err)
         }
       }
 
       // Refresh the list
       const listResponse = await apiClient.getPendingReviews()
       if (listResponse.success && listResponse.data) {
-        // Normalize reviews - ensure all have id (use reviewId if id is missing)
-        const normalizedReviews = listResponse.data.map((review: any) => ({
-          ...review,
-          id: review.id || review.reviewId,
-        }))
-        setReviews(normalizedReviews)
+        setReviews(listResponse.data)
       }
 
       setIsEditMode(false)
       setEditedData(null)
+      setAreas([])
+      setBlocks([])
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message)
@@ -338,25 +344,6 @@ export default function SiteRegistrationsPage() {
     } finally {
       setIsSaving(false)
     }
-  }
-
-
-  const updateEditedField = (path: string, value: any) => {
-    if (!editedData) return
-
-    const keys = path.split('.')
-    const newData = JSON.parse(JSON.stringify(editedData))
-    let current: any = newData
-
-    for (let i = 0; i < keys.length - 1; i++) {
-      if (!current[keys[i]]) {
-        current[keys[i]] = {}
-      }
-      current = current[keys[i]]
-    }
-
-    current[keys[keys.length - 1]] = value
-    setEditedData(newData)
   }
 
   const formatDate = (dateString: string) => {
@@ -389,20 +376,36 @@ export default function SiteRegistrationsPage() {
     return 'pending'
   }
 
-  const columns: TableColumn<SiteReview>[] = [
+  const columns: TableColumn<PendingReview>[] = [
     {
       key: 'siteDetails',
       header: 'Site Details',
       render: (review) => (
         <div>
           <div className="text-sm font-medium text-gray-900">
-            {review.site?.houseNo || 'N/A'}, {review.site?.street || 'N/A'}
+            {review.fullAddress || 'N/A'}
           </div>
           <div className="text-sm text-gray-500">
-            {review.site?.area?.name || 'N/A'}, {review.site?.block?.name || 'N/A'}
+            {review.createdByUserName || 'N/A'}
           </div>
         </div>
       ),
+      className: 'whitespace-nowrap',
+    },
+    {
+      key: 'reviewType',
+      header: 'Review Type',
+      render: (review) => {
+        const reviewType = review.reviewType || 'N/A'
+        const displayText = reviewType === 'MANUAL_VERIFICATION'
+          ? 'Manual Verification'
+          : reviewType === 'NEW_SITE_VERIFICATION'
+            ? 'New Site Verification'
+            : reviewType
+        return (
+          <div className="text-sm text-gray-900">{displayText}</div>
+        )
+      },
       className: 'whitespace-nowrap',
     },
     {
@@ -414,9 +417,13 @@ export default function SiteRegistrationsPage() {
     {
       key: 'createdAt',
       header: 'Created At',
-      render: (review) => (
-        <div className="text-sm text-gray-900">{formatDate(review.createdAt)}</div>
-      ),
+      render: (review) => {
+        return (
+          <div className="text-sm text-gray-900">
+            {review.createdAt ? formatDate(review.createdAt).split(',')[0] : 'N/A'}
+          </div>
+        )
+      },
       className: 'whitespace-nowrap',
     },
     {
@@ -425,45 +432,10 @@ export default function SiteRegistrationsPage() {
       render: (review) => <StatusBadge status={getStatusForBadge(review.status)} />,
       className: 'whitespace-nowrap',
     },
-    {
-      key: 'actions',
-      header: 'Actions',
-      render: (review) => (
-        <div className="text-sm font-medium" onClick={(e) => e.stopPropagation()}>
-          {review.status === 'PENDING_REVIEW' || review.status === 'UNDER_REVIEW' ? (
-            <div className="flex space-x-2">
-              <button
-                onClick={() => {
-                  const reviewId = review.id || review.reviewId
-                  if (reviewId) handleApprove(reviewId)
-                }}
-                className="text-green-600 hover:text-green-900 font-semibold"
-                disabled={!review.id && !review.reviewId}
-              >
-                Approve
-              </button>
-              <button
-                onClick={() => {
-                  const reviewId = review.id || review.reviewId
-                  if (reviewId) handleRejectClick(reviewId)
-                }}
-                className="text-red-600 hover:text-red-900 font-semibold"
-                disabled={!review.id && !review.reviewId}
-              >
-                Reject
-              </button>
-            </div>
-          ) : (
-            <span className="text-gray-400">No action</span>
-          )}
-        </div>
-      ),
-      className: 'whitespace-nowrap',
-    },
   ]
 
   // Filter only pending reviews
-  const pendingReviews = reviews.filter(review => 
+  const pendingReviews = reviews.filter(review =>
     review.status === 'PENDING_REVIEW' || review.status === 'UNDER_REVIEW'
   )
 
@@ -484,22 +456,18 @@ export default function SiteRegistrationsPage() {
             </div>
           )}
 
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-          ) : (
+          <Table
+            columns={columns}
+            data={pendingReviews}
+            emptyMessage="No pending site registrations found"
+            getRowKey={(review) => review.id || `review-${Math.random()}`}
+            onRowClick={handleRowClick}
+            isLoading={isLoading}
+            skeletonRows={10}
+          />
+
+          {!isLoading && (
             <>
-              <Table
-                columns={columns}
-                data={pendingReviews}
-                emptyMessage="No pending site registrations found"
-                getRowKey={(review) => review.id || review.reviewId || `review-${Math.random()}`}
-                onRowClick={handleRowClick}
-              />
 
               {/* Detail Modal */}
               <Modal
@@ -507,125 +475,205 @@ export default function SiteRegistrationsPage() {
                 onClose={closeModal}
                 title="Site Registration Details"
                 size="5xl"
+                headerActions={
+                  !isEditMode ? (
+                    <button
+                      onClick={handleEditClick}
+                      className="flex items-center space-x-2 px-4 py-2 bg-[#4388BC] text-white rounded-lg text-sm font-medium"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      <span>Edit</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={handleCancelEdit}
+                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
+                        disabled={isSaving}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className="px-4 py-2 bg-[#4388BC] text-white rounded-lg hover:bg-[#4388BC] transition-colors text-sm font-medium disabled:opacity-50"
+                      >
+                        {isSaving ? 'Saving...' : 'Save Changes'}
+                      </button>
+                    </div>
+                  )
+                }
               >
-                {selectedReview && (
+                {isLoadingDetails ? (
                   <div className="space-y-6">
-                    {/* Header Actions */}
-                    <div className="flex justify-between items-center pb-4 border-b border-gray-200">
-                      <div className="flex items-center space-x-2">
-                        {!isEditMode && (
-                          <button
-                            onClick={handleEditClick}
-                            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            <span>Edit</span>
-                          </button>
-                        )}
-                      </div>
-                      {isEditMode && (
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={handleCancelEdit}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
-                            disabled={isSaving}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={handleSave}
-                            disabled={isSaving}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
-                          >
-                            {isSaving ? 'Saving...' : 'Save Changes'}
-                          </button>
+                    {/* Site Information Skeleton */}
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Site Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">House Number</label>
+                          <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
                         </div>
-                      )}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Street</label>
+                          <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Area</label>
+                          <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Block</label>
+                          <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                        </div>
+                      </div>
                     </div>
 
-                    {isLoadingDetails && (
-                      <div className="flex items-center justify-center py-4 bg-blue-50 rounded-lg">
-                        <svg className="animate-spin h-5 w-5 text-blue-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span className="text-sm text-blue-600">Loading full details...</span>
+                    {/* Location Map & Documents Skeleton */}
+                    <div className="border-t border-gray-200 pt-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Map Skeleton */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4">Location Map</h3>
+                          <div className="h-[365px] bg-gray-200 rounded-lg animate-pulse"></div>
+                        </div>
+                        {/* Documents Skeleton */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4">Site Documents & Pictures</h3>
+                          <div className="space-y-4 h-[365px] overflow-y-auto">
+                            {[1, 2].map((i) => (
+                              <div key={i} className="bg-gray-50 p-4 rounded-lg">
+                                <div className="h-[300px] bg-gray-200 rounded-lg animate-pulse"></div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    )}
+                    </div>
 
+                    {/* Created By Skeleton */}
+                    <div className="border-t border-gray-200 pt-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Created By</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                          <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Consumer Number</label>
+                          <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
+                          <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Review Information Skeleton */}
+                    <div className="border-t border-gray-200 pt-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Review Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                          <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                          <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Created At</label>
+                          <div className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : selectedReview ? (
+                  <div className="space-y-6">
                     {/* Site Information */}
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 mb-4">Site Information</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">House Number</label>
-                          {isEditMode && editedData ? (
-                            <input
-                              type="text"
-                              value={editedData.site?.houseNo || ''}
-                              onChange={(e) => updateEditedField('site.houseNo', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            />
-                          ) : (
-                            <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site?.houseNo || 'N/A'}</p>
-                          )}
+                          <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site?.houseNo || 'N/A'}</p>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Street</label>
-                          {isEditMode && editedData ? (
-                            <input
-                              type="text"
-                              value={editedData.site?.street || ''}
-                              onChange={(e) => updateEditedField('site.street', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            />
-                          ) : (
-                            <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site?.street || 'N/A'}</p>
-                          )}
+                          <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site?.street || 'N/A'}</p>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Area</label>
                           {isEditMode && editedData ? (
-                            <input
-                              type="text"
-                              value={editedData.site?.area?.name || ''}
+                            <select
+                              value={editedData.site?.area?.id || ''}
                               onChange={(e) => {
+                                const selectedAreaId = parseInt(e.target.value)
+                                const selectedArea = areas.find(a => a.id === selectedAreaId)
                                 const newData = JSON.parse(JSON.stringify(editedData))
                                 if (!newData.site.area) newData.site.area = { id: 0, name: '' }
-                                newData.site.area.name = e.target.value
+                                newData.site.area.id = selectedAreaId
+                                newData.site.area.name = selectedArea?.name || ''
+                                // Reset block when area changes
+                                newData.site.block = { id: 0, name: '' }
                                 setEditedData(newData)
+                                // Fetch blocks for the selected area
+                                if (selectedAreaId) {
+                                  fetchBlocksForArea(selectedAreaId)
+                                } else {
+                                  setBlocks([])
+                                }
                               }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            />
+                              disabled={isLoadingAreas}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            >
+                              <option value="">Select Area</option>
+                              {areas.map((area) => (
+                                <option key={area.id} value={area.id}>
+                                  {area.name}
+                                </option>
+                              ))}
+                            </select>
                           ) : (
-                            <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site?.area?.name || 'N/A'}</p>
+                            <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site?.areaName || 'N/A'}</p>
                           )}
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Block</label>
                           {isEditMode && editedData ? (
-                            <input
-                              type="text"
-                              value={editedData.site?.block?.name || ''}
+                            <select
+                              value={editedData.site?.block?.id || ''}
                               onChange={(e) => {
+                                const selectedBlockId = parseInt(e.target.value)
+                                const selectedBlock = blocks.find(b => b.id === selectedBlockId)
                                 const newData = JSON.parse(JSON.stringify(editedData))
                                 if (!newData.site.block) newData.site.block = { id: 0, name: '' }
-                                newData.site.block.name = e.target.value
+                                newData.site.block.id = selectedBlockId
+                                newData.site.block.name = selectedBlock?.name || ''
                                 setEditedData(newData)
                               }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            />
+                              disabled={isLoadingBlocks || !editedData.site?.area?.id}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            >
+                              <option value="">Select Block</option>
+                              {blocks.map((block) => (
+                                <option key={block.id} value={block.id}>
+                                  {block.name}
+                                </option>
+                              ))}
+                            </select>
                           ) : (
-                            <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site?.block?.name || 'N/A'}</p>
+                            <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site?.blockName || 'N/A'}</p>
                           )}
                         </div>
                       </div>
                     </div>
 
                     {/* Location Map & Site Documents Side by Side */}
-                    {((isEditMode ? editedData?.site?.pinLat && editedData?.site?.pinLng : selectedReview.site?.pinLat && selectedReview.site?.pinLng) || (selectedReview.site?.documents && Array.isArray(selectedReview.site.documents) && selectedReview.site.documents.length > 0)) && (
+                    {((isEditMode ? editedData?.site?.pinLat && editedData?.site?.pinLng : selectedReview.site?.pinLat && selectedReview.site?.pinLng) || (selectedReview.documents && Array.isArray(selectedReview.documents) && selectedReview.documents.length > 0)) && (
                       <div className="border-t border-gray-200 pt-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           {/* Location Map - Left Side */}
@@ -642,7 +690,7 @@ export default function SiteRegistrationsPage() {
                                     return (
                                       <iframe
                                         width="100%"
-                                        height="300"
+                                        height="365"
                                         style={{ border: 0 }}
                                         loading="lazy"
                                         allowFullScreen
@@ -655,7 +703,7 @@ export default function SiteRegistrationsPage() {
                                   return null
                                 })()}
                               </div>
-                              {(isEditMode ? editedData?.site?.pinLat && editedData?.site?.pinLng : selectedReview.site?.pinLat && selectedReview.site?.pinLng) && (
+                              {/* {(isEditMode ? editedData?.site?.pinLat && editedData?.site?.pinLng : selectedReview.site?.pinLat && selectedReview.site?.pinLng) && (
                                 <div className="mt-2 text-sm text-gray-600">
                                   <span className="font-medium">Coordinates:</span>{' '}
                                   {isEditMode 
@@ -668,69 +716,72 @@ export default function SiteRegistrationsPage() {
                                     </span>
                                   )}
                                 </div>
-                              )}
+                              )} */}
                             </div>
                           )}
 
                           {/* Site Documents & Pictures - Right Side */}
-                          {selectedReview.site?.documents && Array.isArray(selectedReview.site.documents) && selectedReview.site.documents.length > 0 && (
+                          {selectedReview.documents && Array.isArray(selectedReview.documents) && selectedReview.documents.length > 0 && (
                             <div>
                               <h3 className="text-lg font-semibold text-gray-900 mb-4">Site Documents & Pictures</h3>
-                              <div className="space-y-4 h-[300px] overflow-y-auto">
-                                {selectedReview.site.documents.map((doc, docIndex) => {
-                                  const isImage = doc?.fileUri && /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.fileUri)
+                              <div className="space-y-4 h-[365px] overflow-y-auto">
+                                {selectedReview.documents.map((doc, docIndex) => {
+                                  // Use imageData from API response (base64 format)
+                                  const imageData = doc?.imageData
+
+                                  // Check if it's an image by imageData format
+                                  const isImage = imageData && imageData.startsWith('data:image/')
+
                                   return (
                                     <div key={doc?.id || `site-doc-${docIndex}`} className="bg-gray-50 p-4 rounded-lg">
-                                      <div className="flex items-start justify-between mb-2">
-                                        <div>
-                                          <span className="text-sm font-medium text-gray-900">{doc?.type || 'Unknown'}</span>
-                                          {doc?.uploadedBy?.firstName && (
-                                            <p className="text-xs text-gray-500 mt-1">
-                                              Uploaded by: {doc.uploadedBy.firstName} {doc.uploadedBy.lastName || ''}
-                                            </p>
-                                          )}
-                                          {doc?.uploadedAt && (
-                                            <p className="text-xs text-gray-500 mt-1">{formatDate(doc.uploadedAt)}</p>
-                                          )}
-                                        </div>
-                                      </div>
-                                      {doc?.fileUri && (
+                                      {imageData && (
                                         <div className="mt-3">
                                           {isImage ? (
-                                            <div>
+                                            <div className="relative bg-white rounded-lg border-2 border-gray-200 p-3 flex items-center justify-center h-[365px] overflow-hidden cursor-pointer hover:border-blue-400 transition-colors"
+                                              onClick={() => {
+                                                // Open base64 image in new tab
+                                                const newWindow = window.open()
+                                                if (newWindow) {
+                                                  newWindow.document.write(`<img src="${imageData}" style="max-width: 100%; height: auto;" />`)
+                                                }
+                                              }}
+                                              title="Click to view full image"
+                                            >
                                               <img
-                                                src={doc.fileUri}
-                                                alt={doc.type || 'Document'}
-                                                className="w-full h-32 object-cover rounded-lg border border-gray-200 mb-2"
+                                                src={imageData}
+                                                alt="Document"
+                                                className="max-w-full max-h-full w-auto h-auto object-contain rounded pointer-events-none"
+                                                style={{ display: 'block' }}
                                                 onError={(e) => {
-                                                  (e.target as HTMLImageElement).style.display = 'none'
+                                                  const target = e.target as HTMLImageElement
+                                                  target.style.display = 'none'
+                                                  const parent = target.parentElement
+                                                  if (parent && !parent.querySelector('.image-error-fallback')) {
+                                                    const fallback = document.createElement('div')
+                                                    fallback.className = 'image-error-fallback text-sm text-gray-500 text-center py-4 w-full'
+                                                    fallback.innerHTML = `
+                                                      <svg class="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                      </svg>
+                                                      <p class="mb-2">Image could not be loaded</p>
+                                                    `
+                                                    parent.appendChild(fallback)
+                                                  }
                                                 }}
                                               />
-                                              <a
-                                                href={doc.fileUri}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                              >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                </svg>
-                                                <span>View Full Image</span>
-                                              </a>
                                             </div>
                                           ) : (
-                                            <a
-                                              href={doc.fileUri}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                            >
-                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                              </svg>
-                                              <span>View Document</span>
-                                            </a>
+                                            <div className="text-sm text-gray-500 p-4 text-center">
+                                              <p>Document preview not available</p>
+                                              <p className="text-xs mt-1">Document ID: {doc.id}</p>
+                                            </div>
                                           )}
+                                        </div>
+                                      )}
+                                      {!imageData && (
+                                        <div className="text-sm text-gray-500 p-4 text-center">
+                                          <p>No image data available</p>
+                                          <p className="text-xs mt-1">Document ID: {doc.id}</p>
                                         </div>
                                       )}
                                     </div>
@@ -743,255 +794,43 @@ export default function SiteRegistrationsPage() {
                       </div>
                     )}
 
-                    {/* User Information */}
-                    {(isEditMode ? editedData?.site?.memberships : selectedReview.site?.memberships) && Array.isArray(isEditMode ? editedData?.site?.memberships : selectedReview.site?.memberships) && (isEditMode ? editedData?.site?.memberships : selectedReview.site?.memberships).length > 0 && (
-                      <div className="border-t border-gray-200 pt-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">User Information</h3>
-                        {(isEditMode ? editedData?.site?.memberships : selectedReview.site?.memberships).map((membership: any, index: number) => {
-                          const membershipData = isEditMode ? editedData?.site?.memberships[index] : membership
-                          return (
-                            <div key={membershipData?.id || index} className="mb-6 last:mb-0">
-                              {membershipData?.user && (
-                                <>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                                      {isEditMode && editedData ? (
-                                        <input
-                                          type="text"
-                                          value={editedData.site?.memberships?.[index]?.user?.firstName || ''}
-                                          onChange={(e) => {
-                                            const newData = JSON.parse(JSON.stringify(editedData))
-                                            if (!newData.site.memberships[index].user) newData.site.memberships[index].user = {}
-                                            newData.site.memberships[index].user.firstName = e.target.value
-                                            setEditedData(newData)
-                                          }}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                        />
-                                      ) : (
-                                        <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
-                                          {membershipData.user.firstName || ''}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                                      {isEditMode && editedData ? (
-                                        <input
-                                          type="text"
-                                          value={editedData.site?.memberships?.[index]?.user?.lastName || ''}
-                                          onChange={(e) => {
-                                            const newData = JSON.parse(JSON.stringify(editedData))
-                                            if (!newData.site.memberships[index].user) newData.site.memberships[index].user = {}
-                                            newData.site.memberships[index].user.lastName = e.target.value
-                                            setEditedData(newData)
-                                          }}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                        />
-                                      ) : (
-                                        <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
-                                          {membershipData.user.lastName || ''}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                      {isEditMode && editedData ? (
-                                        <input
-                                          type="email"
-                                          value={editedData.site?.memberships?.[index]?.user?.email || ''}
-                                          onChange={(e) => {
-                                            const newData = JSON.parse(JSON.stringify(editedData))
-                                            if (!newData.site.memberships[index].user) newData.site.memberships[index].user = {}
-                                            newData.site.memberships[index].user.email = e.target.value
-                                            setEditedData(newData)
-                                          }}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                        />
-                                      ) : (
-                                        <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{membershipData.user.email || 'N/A'}</p>
-                                      )}
-                                    </div>
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                                      {isEditMode && editedData ? (
-                                        <input
-                                          type="tel"
-                                          value={editedData.site?.memberships?.[index]?.user?.primaryPhone || ''}
-                                          onChange={(e) => {
-                                            const newData = JSON.parse(JSON.stringify(editedData))
-                                            if (!newData.site.memberships[index].user) newData.site.memberships[index].user = {}
-                                            newData.site.memberships[index].user.primaryPhone = e.target.value
-                                            setEditedData(newData)
-                                          }}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                        />
-                                      ) : (
-                                        <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{membershipData.user.primaryPhone || 'N/A'}</p>
-                                      )}
-                                    </div>
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">CNIC</label>
-                                      {isEditMode && editedData ? (
-                                        <input
-                                          type="text"
-                                          value={editedData.site?.memberships?.[index]?.user?.cnic || ''}
-                                          onChange={(e) => {
-                                            const newData = JSON.parse(JSON.stringify(editedData))
-                                            if (!newData.site.memberships[index].user) newData.site.memberships[index].user = {}
-                                            newData.site.memberships[index].user.cnic = e.target.value
-                                            setEditedData(newData)
-                                          }}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                        />
-                                      ) : (
-                                        <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{membershipData.user.cnic || 'N/A'}</p>
-                                      )}
-                                    </div>
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">Membership Status</label>
-                                      {isEditMode && editedData ? (
-                                        <select
-                                          value={editedData.site?.memberships?.[index]?.isActive ? 'true' : 'false'}
-                                          onChange={(e) => {
-                                            const newData = JSON.parse(JSON.stringify(editedData))
-                                            newData.site.memberships[index].isActive = e.target.value === 'true'
-                                            setEditedData(newData)
-                                          }}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                        >
-                                          <option value="true">Active</option>
-                                          <option value="false">Inactive</option>
-                                        </select>
-                                      ) : (
-                                        <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
-                                          {membershipData.isActive ? 'Active' : 'Inactive'}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                {/* User Documents */}
-                                {membershipData.user.documents && Array.isArray(membershipData.user.documents) && membershipData.user.documents.length > 0 && (
-                                  <div className="mt-4">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">User Documents</label>
-                                    <div className="space-y-2">
-                                      {membershipData.user.documents.map((doc: any, docIndex: number) => (
-                                        <div key={doc?.id || `doc-${index}-${docIndex}`} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                                          <span className="text-sm text-gray-900">{doc?.type || 'Unknown'}</span>
-                                          {doc?.fileUri && (
-                                            <a
-                                              href={doc.fileUri}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                            >
-                                              View Document
-                                            </a>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
-                      </div>
-                    )}
-
-                    {/* Created By */}
-                    {(isEditMode ? editedData?.site?.createdBy : selectedReview.site?.createdBy) && (
-                      <div className="border-t border-gray-200 pt-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Created By</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Created By Information */}
+                    <div className="border-t border-gray-200 pt-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Created By</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                          <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
+                            {selectedReview.createdByUserName || 'N/A'}
+                          </p>
+                        </div>
+                        {selectedReview.createdByConsumerNo && (
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                            {isEditMode && editedData ? (
-                              <input
-                                type="text"
-                                value={editedData.site?.createdBy?.firstName || ''}
-                                onChange={(e) => {
-                                  const newData = JSON.parse(JSON.stringify(editedData))
-                                  if (!newData.site.createdBy) newData.site.createdBy = {}
-                                  newData.site.createdBy.firstName = e.target.value
-                                  setEditedData(newData)
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                              />
-                            ) : (
-                              <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
-                                {selectedReview.site.createdBy.firstName || 'N/A'}
-                              </p>
-                            )}
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Consumer Number</label>
+                            <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
+                              {selectedReview.createdByConsumerNo}
+                            </p>
                           </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                            {isEditMode && editedData ? (
-                              <input
-                                type="text"
-                                value={editedData.site?.createdBy?.lastName || ''}
-                                onChange={(e) => {
-                                  const newData = JSON.parse(JSON.stringify(editedData))
-                                  if (!newData.site.createdBy) newData.site.createdBy = {}
-                                  newData.site.createdBy.lastName = e.target.value
-                                  setEditedData(newData)
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                              />
-                            ) : (
-                              <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
-                                {selectedReview.site.createdBy.lastName || 'N/A'}
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                            {isEditMode && editedData ? (
-                              <input
-                                type="email"
-                                value={editedData.site?.createdBy?.email || ''}
-                                onChange={(e) => {
-                                  const newData = JSON.parse(JSON.stringify(editedData))
-                                  if (!newData.site.createdBy) newData.site.createdBy = {}
-                                  newData.site.createdBy.email = e.target.value
-                                  setEditedData(newData)
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                              />
-                            ) : (
-                              <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site.createdBy.email || 'N/A'}</p>
-                            )}
-                          </div>
+                        )}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
+                          <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
+                            {selectedReview.createdByUserType || 'N/A'}
+                          </p>
                         </div>
                       </div>
-                    )}
+                    </div>
 
                     {/* Review Information */}
                     <div className="border-t border-gray-200 pt-6">
                       <h3 className="text-lg font-semibold text-gray-900 mb-4">Review Information</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {(isEditMode ? editedData?.priority : selectedReview.priority) && (
+                        {selectedReview.priority && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                            {isEditMode && editedData ? (
-                              <select
-                                value={editedData.priority || 'NORMAL'}
-                                onChange={(e) => updateEditedField('priority', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                              >
-                                <option value="LOW">LOW</option>
-                                <option value="NORMAL">NORMAL</option>
-                                <option value="HIGH">HIGH</option>
-                                <option value="URGENT">URGENT</option>
-                              </select>
-                            ) : (
-                              <div className="bg-gray-50 p-3 rounded-lg">
-                                {getPriorityBadge(selectedReview.priority)}
-                              </div>
-                            )}
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              {getPriorityBadge(selectedReview.priority)}
+                            </div>
                           </div>
                         )}
                         {selectedReview.status && (
@@ -1000,12 +839,6 @@ export default function SiteRegistrationsPage() {
                             <div className="bg-gray-50 p-3 rounded-lg">
                               <StatusBadge status={getStatusForBadge(selectedReview.status)} />
                             </div>
-                          </div>
-                        )}
-                        {selectedReview.assignee?.fullName && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
-                            <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.assignee.fullName}</p>
                           </div>
                         )}
                         {selectedReview.createdAt && (
@@ -1017,62 +850,39 @@ export default function SiteRegistrationsPage() {
                       </div>
                     </div>
 
-                    {/* Events/History */}
-                    {selectedReview.events && Array.isArray(selectedReview.events) && selectedReview.events.length > 0 && (
-                      <div className="border-t border-gray-200 pt-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Review History</h3>
-                        <div className="space-y-3">
-                          {selectedReview.events.map((event, eventIndex) => (
-                            <div key={event?.id || `event-${eventIndex}`} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                              <div className="flex-shrink-0 mt-1">
-                                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-gray-900">{event?.action || 'Unknown Action'}</p>
-                                {event?.note && (
-                                  <p className="text-sm text-gray-600 mt-1">{event.note}</p>
-                                )}
-                                {event?.createdAt && (
-                                  <p className="text-xs text-gray-500 mt-1">{formatDate(event.createdAt)}</p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
                     {/* Action Buttons */}
                     {(selectedReview.status === 'PENDING_REVIEW' || selectedReview.status === 'UNDER_REVIEW') && (
                       <div className="flex space-x-3 pt-4 border-t border-gray-200">
                         <button
                           onClick={() => {
-                            const reviewId = selectedReview.id || selectedReview.reviewId
-                            if (reviewId) {
-                              handleApprove(reviewId)
+                            if (selectedReview.id) {
+                              handleApprove(selectedReview.id)
                               closeModal()
                             }
                           }}
                           className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={!selectedReview.id && !selectedReview.reviewId}
+                          disabled={!selectedReview.id}
                         >
                           Approve Registration
                         </button>
                         <button
                           onClick={() => {
-                            const reviewId = selectedReview.id || selectedReview.reviewId
-                            if (reviewId) {
+                            if (selectedReview.id) {
                               closeModal()
-                              handleRejectClick(reviewId)
+                              handleRejectClick(selectedReview.id)
                             }
                           }}
                           className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={!selectedReview.id && !selectedReview.reviewId}
+                          disabled={!selectedReview.id}
                         >
                           Reject Registration
                         </button>
                       </div>
                     )}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-gray-600">No review details available</p>
                   </div>
                 )}
               </Modal>
@@ -1086,7 +896,7 @@ export default function SiteRegistrationsPage() {
                 }}
                 onConfirm={handleRejectConfirm}
                 title="Reject Site Registration"
-                itemName={rejectReviewId ? reviews.find(r => (r.id || r.reviewId) === rejectReviewId)?.site?.houseNo : undefined}
+                itemName={rejectReviewId ? reviews.find(r => r.id === rejectReviewId)?.fullAddress : undefined}
               />
             </>
           )}

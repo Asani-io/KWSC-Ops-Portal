@@ -149,7 +149,8 @@ Retrieves comprehensive overview data for reviewer dashboard including summary s
 
 ### SITE VERIFICATION & REVIEW
 
-#### 2. Get Pending Reviews
+
+#### 1. Get Pending Reviews
 
 Retrieves all pending site verification cases. Since there's only one reviewer, all pending reviews are available without assignment.
 
@@ -165,40 +166,41 @@ Retrieves all pending site verification cases. Since there's only one reviewer, 
       "siteId": "550e8400-e29b-41d4-a716-446655440000",
       "status": "PENDING_REVIEW",
       "priority": "NORMAL",
-      "site": {
-        "id": "550e8400-e29b-41d4-a716-446655440000",
-        "areaId": 1,
-        "blockId": 3,
-        "houseNo": "123",
-        "street": "Main Street",
-        "status": "PENDING_REVIEW",
-        "area": {
-          "id": 1,
-          "name": "Gulshan-e-Iqbal"
-        },
-        "block": {
-          "id": 3,
-          "name": "Block 1"
-        },
-        "createdBy": {
-          "id": "660e8400-e29b-41d4-a716-446655440001",
-          "firstName": "John",
-          "lastName": "Doe"
-        }
-      },
-      "createdAt": "2025-01-15T08:00:00.000Z"
+      "createdAt": "2025-01-15T08:00:00.000Z",
+      "reviewType": "MANUAL_VERIFICATION",
+      "existingSiteId": "550e8400-e29b-41d4-a716-446655440001",
+      "createdByUserName": "John Doe",
+      "fullAddress": "123 Main Street, Block 1, Gulshan-e-Iqbal"
+    },
+    {
+      "id": "bb0e8400-e29b-41d4-a716-446655440002",
+      "siteId": "660e8400-e29b-41d4-a716-446655440002",
+      "status": "PENDING_REVIEW",
+      "priority": "HIGH",
+      "createdAt": "2025-01-15T09:00:00.000Z",
+      "reviewType": "NEW_SITE_VERIFICATION",
+      "existingSiteId": null,
+      "createdByUserName": "Jane Smith",
+      "fullAddress": "456 Park Avenue, Block 2, Defence"
     }
   ]
 }
 ```
 
-**Note:** No assignment needed - single reviewer handles all pending reviews.
+**Note:** 
+- Simplified response with only top-level fields for easy frontend consumption.
+- No nested `site` object - all required fields are at the top level.
+- No `documents` array - use `/reviewer/reviews/:reviewId` to get full details with documents.
+- `reviewType` indicates the type of review: `"MANUAL_VERIFICATION"` (site claiming) or `"NEW_SITE_VERIFICATION"` (new site).
+- `existingSiteId` is only present when `reviewType === "MANUAL_VERIFICATION"` (site claiming case).
+- `createdAt` represents the review case creation date (submission date).
+- `fullAddress` is formatted as: `"{houseNo} {street}, {blockName}, {areaName}"`.
 
 ---
 
 #### 3. Get Review Details
 
-Retrieves complete details of a site verification case including site information, documents, members, and verification history.
+Retrieves complete details of a site verification case including site information and documents with base64 image data.
 
 **Endpoint:** `GET /reviewer/reviews/:reviewId`
 
@@ -212,14 +214,18 @@ Retrieves complete details of a site verification case including site informatio
   "data": {
     "id": "aa0e8400-e29b-41d4-a716-446655440000",
     "siteId": "550e8400-e29b-41d4-a716-446655440000",
-    "status": "UNDER_REVIEW",
-    "currentAssigneeEmployeeId": "bb0e8400-e29b-41d4-a716-446655440001",
+    "fullAddress": "123 Main Street, Block 1, Gulshan-e-Iqbal",
+    "status": "PENDING_REVIEW",
     "priority": "NORMAL",
-    "slaDueAt": "2025-01-16T10:00:00.000Z",
+    "createdAt": "2025-01-15T08:00:00.000Z",
+    "createdByUserName": "John Doe",
+    "createdByConsumerNo": "123456789",
+    "createdByUserType": "CONSUMER",
     "site": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
       "areaId": 1,
+      "areaName": "Gulshan-e-Iqbal",
       "blockId": 3,
+      "blockName": "Block 1",
       "houseNo": "123",
       "street": "Main Street",
       "nearestLandmark": "Near Park",
@@ -228,76 +234,31 @@ Retrieves complete details of a site verification case including site informatio
       "pinLng": 67.0011,
       "pinAccuracyM": 10.5,
       "pinCapturedAt": "2025-01-15T09:00:00.000Z",
-      "consumerNoClaimed": "123456789",
-      "plotKey": "AREA-1-BLOCK-3-HOUSE-123",
-      "status": "UNDER_REVIEW",
-      "area": {
-        "id": 1,
-        "name": "Gulshan-e-Iqbal"
-      },
-      "block": {
-        "id": 3,
-        "name": "Block 1"
-      },
-      "createdBy": {
-        "id": "660e8400-e29b-41d4-a716-446655440001",
-        "firstName": "John",
-        "lastName": "Doe",
-        "primaryPhone": "+923001234567",
-        "email": "john.doe@example.com",
-        "userType": "CONSUMER",
-        "onboardingStage": "A1"
-      },
-      "documents": [
-        {
-          "id": "880e8400-e29b-41d4-a716-446655440003",
-          "type": "SSGC_BILL",
-          "fileUri": "https://storage.googleapis.com/bucket/file.pdf",
-          "uploadedBy": {
-            "id": "660e8400-e29b-41d4-a716-446655440001",
-            "firstName": "John",
-            "lastName": "Doe"
-          }
-        }
-      ],
-      "memberships": [
-        {
-          "id": "990e8400-e29b-41d4-a716-446655440004",
-          "role": "OWNER",
-          "isActive": true,
-          "user": {
-            "id": "660e8400-e29b-41d4-a716-446655440001",
-            "firstName": "John",
-            "lastName": "Doe",
-            "primaryPhone": "+923001234567",
-            "userType": "CONSUMER",
-            "onboardingStage": "A1"
-          }
-        }
-      ]
+      "plotKey": "AREA-1-BLOCK-3-HOUSE-123"
     },
-    "assignee": {
-      "id": "bb0e8400-e29b-41d4-a716-446655440001",
-      "fullName": "Reviewer Name",
-      "email": "reviewer@kwsc.com"
-    },
-    "events": [
+    "documents": [
       {
-        "id": "cc0e8400-e29b-41d4-a716-446655440005",
-        "action": "ASSIGN",
-        "fromStatus": "PENDING_REVIEW",
-        "toStatus": "UNDER_REVIEW",
-        "note": "Assigned for review",
-        "createdAt": "2025-01-15T10:00:00.000Z",
-        "employee": {
-          "id": "bb0e8400-e29b-41d4-a716-446655440001",
-          "fullName": "Reviewer Name"
-        }
+        "id": "880e8400-e29b-41d4-a716-446655440003",
+        "imageData": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACiI..."
+      },
+      {
+        "id": "990e8400-e29b-41d4-a716-446655440004",
+        "imageData": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACiI..."
       }
     ]
   }
 }
 ```
+
+**Note:**
+- `fullAddress` is at the top level, right after `siteId`.
+- `areaName` and `blockName` are included in the `site` object (not nested area/block objects).
+- `createdByUserName`, `createdByConsumerNo`, and `createdByUserType` are at the top level.
+- `createdByConsumerNo` will be `null` if the user is not a consumer or doesn't have a consumer number.
+- Documents only include `id` and `imageData` (base64 format) - no URLs, no metadata.
+- `imageData` is in the format: `data:image/png;base64,<base64string>` - can be directly used in HTML `<img>` tags or React components.
+- If image loading fails, `imageData` will be `null` and `imageError` field will contain the error message.
+- No `memberships` or `events` arrays - removed for simplified response.
 
 ---
 
@@ -468,7 +429,7 @@ Retrieves personal performance metrics for the current reviewer.
 
 ### ADDRESS & BLOCK MANAGEMENT
 
-#### 8. Create or Update Block
+#### 9. Create or Update Block
 
 Creates a new block or updates an existing block when user enters a block that doesn't exist in the system but the area exists.
 
@@ -511,7 +472,7 @@ Creates a new block or updates an existing block when user enters a block that d
 
 ### GEO DATA FETCHING
 
-#### 9. Get All Areas
+#### 8. Get All Areas
 
 Fetches all active areas in the system. Used by reviewer to see available areas when reviewing sites or creating blocks.
 
@@ -551,7 +512,7 @@ Fetches all active areas in the system. Used by reviewer to see available areas 
 
 ---
 
-#### 10. Get Blocks by Area
+#### 9. Get Blocks by Area
 
 Fetches all active blocks in a specific area. Used by reviewer to see available blocks when reviewing sites or creating new blocks.
 
@@ -607,7 +568,7 @@ Fetches all active blocks in a specific area. Used by reviewer to see available 
 
 ### ADMIN REQUESTS
 
-#### 11. Request Admin to Add Missing Area
+#### 10. Request Admin to Add Missing Area
 
 When reviewer encounters a site with an area that doesn't exist in the system, they can request admin to add it. The request is logged in audit logs for admin review.
 
@@ -652,7 +613,7 @@ When reviewer encounters a site with an area that doesn't exist in the system, t
 
 ---
 
-#### 12. Request Admin to Add Missing Block
+#### 11. Request Admin to Add Missing Block
 
 When reviewer encounters a site with a block that doesn't exist in the system (but the area exists), they can request admin to add it. The request is logged in audit logs for admin review.
 
@@ -701,7 +662,7 @@ When reviewer encounters a site with a block that doesn't exist in the system (b
 
 ### SITE DETAILS MANAGEMENT
 
-#### 13. Update Site Details
+#### 12. Update Site Details
 
 Allows reviewer to edit and fix site information (address, block, area, pin location, etc.).
 
@@ -774,7 +735,7 @@ Allows reviewer to edit and fix site information (address, block, area, pin loca
 
 ### MANUAL VERIFICATION
 
-#### 14. Get Site for Manual Verification Review
+#### 13. Get Site for Manual Verification Review
 
 Retrieves structured site data for manual verification review, including pin location, bills, documents, and verification history.
 
@@ -818,6 +779,8 @@ Retrieves structured site data for manual verification review, including pin loc
           "id": "880e8400-e29b-41d4-a716-446655440003",
           "type": "SSGC_BILL",
           "fileUri": "https://storage.googleapis.com/bucket/file.pdf",
+          "imageData": "data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKMy...",
+          "imageUrl": "/documents/880e8400-e29b-41d4-a716-446655440003?view=true",
           "uploadedBy": {
             "id": "660e8400-e29b-41d4-a716-446655440001",
             "firstName": "John",
@@ -829,6 +792,8 @@ Retrieves structured site data for manual verification review, including pin loc
           "id": "990e8400-e29b-41d4-a716-446655440004",
           "type": "KE_BILL",
           "fileUri": "https://storage.googleapis.com/bucket/file2.pdf",
+          "imageData": "data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKMy...",
+          "imageUrl": "/documents/990e8400-e29b-41d4-a716-446655440004?view=true",
           "uploadedBy": {
             "id": "660e8400-e29b-41d4-a716-446655440001",
             "firstName": "John",
@@ -884,7 +849,7 @@ Retrieves structured site data for manual verification review, including pin loc
 
 ---
 
-#### 15. Approve Manual Verification
+#### 14. Approve Manual Verification
 
 Approves manual verification with area and block approval. Used when existing site is found and needs manual verification.
 
@@ -943,7 +908,7 @@ Approves manual verification with area and block approval. Used when existing si
 
 ---
 
-#### 16. Link Existing Site to User
+#### 15. Link Existing Site to User
 
 Links an existing site to a user when an existing site is found (e.g., when user enters block/area/house that matches an existing site).
 
@@ -1040,24 +1005,25 @@ POST /reviewer/reviews/:reviewId/action
 
 **API Calls:**
 ```javascript
-// 1. Create block
-POST /reviewer/blocks/create-or-update
+// 1. Request admin to add block
+POST /reviewer/requests/add-block
 {
   "areaId": 1,
-  "blockName": "A-123"
+  "blockName": "A-123",
+  "notes": "User submitted site with this block but it doesn't exist"
 }
 
-// 2. Update site with new block
+// 2. After admin approves, update site with new block
 PUT /reviewer/sites/:siteId/update-details
 {
-  "blockId": 5  // ID from step 1
+  "blockId": 5  // ID from admin-created block
 }
 
 // 3. Approve site
 POST /reviewer/reviews/:reviewId/action
 {
   "action": "approve",
-  "notes": "Block created and verified"
+  "notes": "Block added and verified"
 }
 ```
 
@@ -1182,15 +1148,23 @@ POST /reviewer/reviews/:reviewId/action
 {
   id: string; // UUID
   type: "SSGC_BILL" | "KE_BILL" | "OTHER_UTILITY" | "OTHER";
-  fileUri: string;
+  fileUri: string; // Original file URI (GCS URL or processed URI)
+  imageData: string | null; // Base64 encoded image/file data (format: "data:{mimeType};base64,{base64String}")
+  imageUrl: string; // Direct URL to view/download image (format: "/documents/{id}?view=true")
   uploadedBy: {
     id: string;
     firstName?: string;
     lastName?: string;
   };
-  uploadedAt: string; // ISO 8601
+  uploadedAt: string; // ISO 8601 timestamp
 }
 ```
+
+**Image Viewing:**
+- `imageData`: Base64 encoded image/file that can be used directly in `<img>` tags: `<img src={document.imageData} />`
+- `imageUrl`: Direct URL endpoint to get the binary image/file. Use `GET /documents/:documentId?view=true` to retrieve the actual file.
+- If image cannot be loaded, `imageData` will be `null` but `imageUrl` will still be available.
+- For large files, prefer using `imageUrl` instead of `imageData` to reduce response size.
 
 ### SiteMembership Object
 ```typescript
@@ -1318,12 +1292,6 @@ curl -X GET http://localhost:3000/reviewer/reviews/pending \
 # Get Review Details
 curl -X GET http://localhost:3000/reviewer/reviews/aa0e8400-e29b-41d4-a716-446655440000 \
   -H "Authorization: Bearer <token>"
-
-# Create or Update Block
-curl -X POST http://localhost:3000/reviewer/blocks/create-or-update \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"areaId": 1, "blockName": "Block A-123"}'
 
 # Get All Areas
 curl -X GET http://localhost:3000/reviewer/geo/areas \

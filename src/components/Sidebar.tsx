@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { authUtils } from '../utils/auth'
+import { apiClient } from '../services/api'
 
 interface SidebarItem {
   path: string
@@ -32,21 +33,30 @@ export default function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const handleLogout = () => {
-    authUtils.clearAuth()
-    navigate('/login')
+  const handleLogout = async () => {
+    try {
+      // Call logout API
+      await apiClient.logout()
+    } catch (err) {
+      // Even if logout API fails, clear local auth and redirect
+      console.error('Logout API error:', err)
+    } finally {
+      // Always clear auth and redirect
+      authUtils.clearAuth()
+      navigate('/login')
+    }
   }
 
   return (
-    <div className="w-64 bg-white text-gray-900 min-h-screen flex flex-col shadow-soft">
+    <div className="fixed left-0 top-0 w-64 h-screen bg-white text-gray-900 flex flex-col shadow-soft z-10">
       {/* Logo/Header */}
-      <div className="p-6 border-b border-gray-200">
+      <div className="p-6 border-b border-gray-200 flex-shrink-0">
         <h1 className="text-xl font-bold text-gray-900">KWSC Ops Portal</h1>
         <p className="text-sm text-gray-600 mt-1">Admin Dashboard</p>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4">
+      <nav className="flex-1 p-4 overflow-y-auto">
         <ul className="space-y-2">
           {sidebarItems.map((item) => {
             const isActive = location.pathname === item.path
@@ -56,8 +66,8 @@ export default function Sidebar() {
                   to={item.path}
                   className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                     isActive
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                      ? 'bg-[#4383B314] text-[#4383B3]'
+                      : 'text-[797979] hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
                   {item.icon}
@@ -70,7 +80,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-200 flex-shrink-0">
         <button 
           onClick={handleLogout}
           className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
@@ -84,4 +94,3 @@ export default function Sidebar() {
     </div>
   )
 }
-
