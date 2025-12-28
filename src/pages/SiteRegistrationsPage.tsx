@@ -5,6 +5,7 @@ import Table, { type TableColumn } from '../components/Table'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
 import RejectModal from '../components/RejectModal'
+import SearchableSelect from '../components/SearchableSelect'
 import { apiClient } from '../services/api'
 import { authUtils } from '../utils/auth'
 
@@ -72,6 +73,22 @@ export default function SiteRegistrationsPage() {
   const [blocks, setBlocks] = useState<Array<{ id: number; name: string; areaId: number }>>([])
   const [isLoadingAreas, setIsLoadingAreas] = useState(false)
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false)
+
+  // Fetch areas on component mount (after login)
+  useEffect(() => {
+    const fetchAreas = async () => {
+      try {
+        const areasResponse = await apiClient.getAllAreas()
+        if (areasResponse.success && areasResponse.data?.areas) {
+          setAreas(areasResponse.data.areas)
+        }
+      } catch (err) {
+        console.error('Failed to fetch areas:', err)
+      }
+    }
+
+    fetchAreas()
+  }, [])
 
   useEffect(() => {
     if (fetchingRef.current) return
@@ -208,31 +225,28 @@ export default function SiteRegistrationsPage() {
     setSelectedReview(null)
     setEditedData(null)
     setIsEditMode(false)
-    setAreas([])
+    // Don't clear areas anymore since we want to keep them cached
     setBlocks([])
   }
 
   const handleEditClick = async () => {
     if (selectedReview) {
-      // Fetch all areas for dropdown first
-      setIsLoadingAreas(true)
-      try {
-        const areasResponse = await apiClient.getAllAreas()
-        if (areasResponse.success && areasResponse.data?.areas) {
-          setAreas(areasResponse.data.areas)
+      // If areas are not already loaded, fetch them
+      if (areas.length === 0) {
+        setIsLoadingAreas(true)
+        try {
+          const areasResponse = await apiClient.getAllAreas()
+          if (areasResponse.success && areasResponse.data?.areas) {
+            setAreas(areasResponse.data.areas)
+          }
+        } catch (err) {
+          console.error('Failed to fetch areas:', err)
+          setError('Failed to load areas. Please try again.')
+          setIsLoadingAreas(false)
+          return
+        } finally {
+          setIsLoadingAreas(false)
         }
-      } catch (err) {
-        console.error('Failed to fetch areas:', err)
-        setError('Failed to load areas. Please try again.')
-        setIsLoadingAreas(false)
-        return
-      } finally {
-        setIsLoadingAreas(false)
-      }
-
-      // Fetch blocks for the current area
-      if (selectedReview.site?.areaId) {
-        await fetchBlocksForArea(selectedReview.site.areaId)
       }
 
       // Create a deep copy for editing - convert areaName/blockName structure to area/block objects for compatibility
@@ -244,6 +258,11 @@ export default function SiteRegistrationsPage() {
       }
       setEditedData(copy)
       setIsEditMode(true)
+
+      // Fetch blocks for the current area in background (non-blocking)
+      if (selectedReview.site?.areaId) {
+        fetchBlocksForArea(selectedReview.site.areaId)
+      }
     }
   }
 
@@ -266,7 +285,7 @@ export default function SiteRegistrationsPage() {
   const handleCancelEdit = () => {
     setEditedData(null)
     setIsEditMode(false)
-    setAreas([])
+    // Don't clear areas anymore since we want to keep them cached
     setBlocks([])
   }
 
@@ -608,35 +627,28 @@ export default function SiteRegistrationsPage() {
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Area</label>
                           {isEditMode && editedData ? (
-                            <select
+                            <SearchableSelect
+                              options={areas}
                               value={editedData.site?.area?.id || ''}
-                              onChange={(e) => {
-                                const selectedAreaId = parseInt(e.target.value)
-                                const selectedArea = areas.find(a => a.id === selectedAreaId)
+                              onChange={(selectedId, selectedOption) => {
                                 const newData = JSON.parse(JSON.stringify(editedData))
                                 if (!newData.site.area) newData.site.area = { id: 0, name: '' }
-                                newData.site.area.id = selectedAreaId
-                                newData.site.area.name = selectedArea?.name || ''
+                                newData.site.area.id = selectedId
+                                newData.site.area.name = selectedOption?.name || ''
                                 // Reset block when area changes
                                 newData.site.block = { id: 0, name: '' }
                                 setEditedData(newData)
                                 // Fetch blocks for the selected area
-                                if (selectedAreaId) {
-                                  fetchBlocksForArea(selectedAreaId)
+                                if (selectedId) {
+                                  fetchBlocksForArea(selectedId)
                                 } else {
                                   setBlocks([])
                                 }
                               }}
+                              placeholder="Select Area"
                               disabled={isLoadingAreas}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
-                            >
-                              <option value="">Select Area</option>
-                              {areas.map((area) => (
-                                <option key={area.id} value={area.id}>
-                                  {area.name}
-                                </option>
-                              ))}
-                            </select>
+                              isLoading={isLoadingAreas}
+                            />
                           ) : (
                             <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site?.areaName || 'N/A'}</p>
                           )}
@@ -644,27 +656,20 @@ export default function SiteRegistrationsPage() {
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Block</label>
                           {isEditMode && editedData ? (
-                            <select
+                            <SearchableSelect
+                              options={blocks}
                               value={editedData.site?.block?.id || ''}
-                              onChange={(e) => {
-                                const selectedBlockId = parseInt(e.target.value)
-                                const selectedBlock = blocks.find(b => b.id === selectedBlockId)
+                              onChange={(selectedId, selectedOption) => {
                                 const newData = JSON.parse(JSON.stringify(editedData))
                                 if (!newData.site.block) newData.site.block = { id: 0, name: '' }
-                                newData.site.block.id = selectedBlockId
-                                newData.site.block.name = selectedBlock?.name || ''
+                                newData.site.block.id = selectedId
+                                newData.site.block.name = selectedOption?.name || ''
                                 setEditedData(newData)
                               }}
+                              placeholder="Select Block"
                               disabled={isLoadingBlocks || !editedData.site?.area?.id}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
-                            >
-                              <option value="">Select Block</option>
-                              {blocks.map((block) => (
-                                <option key={block.id} value={block.id}>
-                                  {block.name}
-                                </option>
-                              ))}
-                            </select>
+                              isLoading={isLoadingBlocks}
+                            />
                           ) : (
                             <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedReview.site?.blockName || 'N/A'}</p>
                           )}
@@ -727,9 +732,20 @@ export default function SiteRegistrationsPage() {
                               <div className="space-y-4 h-[365px] overflow-y-auto">
                                 {selectedReview.documents.map((doc, docIndex) => {
                                   // Use imageData from API response (base64 format)
-                                  const imageData = doc?.imageData
+                                  let imageData = doc?.imageData
 
-                                  // Check if it's an image by imageData format
+                                  // Convert application/octet-stream to image/jpeg for proper rendering
+                                  // Browsers may not render application/octet-stream as images
+                                  if (imageData && imageData.startsWith('data:application/octet-stream')) {
+                                    // Extract the base64 data part (everything after the comma)
+                                    const base64Data = imageData.split(',')[1]
+                                    if (base64Data) {
+                                      // Convert to image/jpeg format (octet-stream is often used for JPEGs)
+                                      imageData = `data:image/jpeg;base64,${base64Data}`
+                                    }
+                                  }
+
+                                  // Check if it's a valid image data URI
                                   const isImage = imageData && imageData.startsWith('data:image/')
 
                                   return (

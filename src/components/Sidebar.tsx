@@ -35,13 +35,10 @@ export default function Sidebar() {
 
   const handleLogout = async () => {
     try {
-      // Call logout API
       await apiClient.logout()
     } catch (err) {
-      // Even if logout API fails, clear local auth and redirect
       console.error('Logout API error:', err)
     } finally {
-      // Always clear auth and redirect
       authUtils.clearAuth()
       navigate('/login')
     }
@@ -67,7 +64,7 @@ export default function Sidebar() {
                   className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                     isActive
                       ? 'bg-[#4383B314] text-[#4383B3]'
-                      : 'text-[797979] hover:bg-gray-100 hover:text-gray-900'
+                      : 'text-[#797979] hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
                   {item.icon}
