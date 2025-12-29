@@ -13,7 +13,7 @@ import { authUtils } from '../utils/auth'
 interface PendingReview {
   id: string
   siteId: string
-  status: 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED'
+  status: 'PENDING' | 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED'
   priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
   createdAt: string
   reviewType: string
@@ -27,7 +27,7 @@ interface SiteReviewDetail {
   id: string
   siteId: string
   fullAddress: string
-  status: 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED'
+  status: 'PENDING' | 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED'
   priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
   createdAt: string
   createdByUserName: string
@@ -138,10 +138,10 @@ export default function SiteRegistrationsPage() {
   const handleApprove = async (reviewId: string) => {
     try {
       // Find next pending review from current state (before API call)
-      const pendingReviews = reviews.filter((r: PendingReview) => 
-        (r.status === 'PENDING_REVIEW' || r.status === 'UNDER_REVIEW') && r.id !== reviewId
+      const pendingReviews = reviews.filter((r: PendingReview) =>
+        (r.status === 'PENDING' || r.status === 'PENDING_REVIEW' || r.status === 'UNDER_REVIEW') && r.id !== reviewId
       )
-      
+
       // Immediately open next review if available
       if (pendingReviews.length > 0 && isModalOpen) {
         const nextReview = pendingReviews[0]
@@ -149,7 +149,7 @@ export default function SiteRegistrationsPage() {
       } else if (isModalOpen) {
         closeModal()
       }
-      
+
       // Background API calls (don't block UI)
       apiClient.approveReview(reviewId, 'All documents verified. Site approved.')
         .then(() => {
@@ -182,15 +182,15 @@ export default function SiteRegistrationsPage() {
     if (rejectReviewId) {
       try {
         // Find next pending review from current state (before API call)
-        const pendingReviews = reviews.filter((r: PendingReview) => 
-          (r.status === 'PENDING_REVIEW' || r.status === 'UNDER_REVIEW') && r.id !== rejectReviewId
+        const pendingReviews = reviews.filter((r: PendingReview) =>
+          (r.status === 'PENDING' || r.status === 'PENDING_REVIEW' || r.status === 'UNDER_REVIEW') && r.id !== rejectReviewId
         )
-        
+
         // Close reject modal immediately
         setIsRejectModalOpen(false)
         const currentRejectId = rejectReviewId
         setRejectReviewId(null)
-        
+
         // Immediately open next review if available
         if (pendingReviews.length > 0) {
           const nextReview = pendingReviews[0]
@@ -198,7 +198,7 @@ export default function SiteRegistrationsPage() {
         } else if (isModalOpen) {
           closeModal()
         }
-        
+
         // Background API calls (don't block UI)
         apiClient.rejectReview(currentRejectId, reason)
           .then(() => {
@@ -463,7 +463,9 @@ export default function SiteRegistrationsPage() {
           ? 'Manual Verification'
           : reviewType === 'NEW_SITE_VERIFICATION'
             ? 'New Site Verification'
-            : reviewType
+            : reviewType === 'SITE_JOIN_REQUEST'
+              ? 'Site Joining Request'
+              : reviewType
         return (
           <div className="text-sm text-gray-900">{displayText}</div>
         )
@@ -498,7 +500,7 @@ export default function SiteRegistrationsPage() {
 
   // Filter only pending reviews
   const pendingReviews = reviews.filter(review =>
-    review.status === 'PENDING_REVIEW' || review.status === 'UNDER_REVIEW'
+    review.status === 'PENDING' || review.status === 'PENDING_REVIEW' || review.status === 'UNDER_REVIEW'
   )
 
   return (
@@ -910,7 +912,7 @@ export default function SiteRegistrationsPage() {
                     </div>
 
                     {/* Action Buttons */}
-                    {(selectedReview.status === 'PENDING_REVIEW' || selectedReview.status === 'UNDER_REVIEW') && (
+                    {(selectedReview.status === 'PENDING' || selectedReview.status === 'PENDING_REVIEW' || selectedReview.status === 'UNDER_REVIEW') && (
                       <div className="flex space-x-3 pt-4 border-t border-gray-200">
                         <button
                           onClick={() => {
