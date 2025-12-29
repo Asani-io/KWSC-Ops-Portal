@@ -137,15 +137,35 @@ export default function SiteRegistrationsPage() {
 
   const handleApprove = async (reviewId: string) => {
     try {
-      await apiClient.approveReview(reviewId, 'All documents verified. Site approved.')
-      // Refresh the list
-      const response = await apiClient.getPendingReviews()
-      if (response.success && response.data) {
-        setReviews(response.data)
-      }
-      if (isModalOpen) {
+      // Find next pending review from current state (before API call)
+      const pendingReviews = reviews.filter((r: PendingReview) => 
+        (r.status === 'PENDING_REVIEW' || r.status === 'UNDER_REVIEW') && r.id !== reviewId
+      )
+      
+      // Immediately open next review if available
+      if (pendingReviews.length > 0 && isModalOpen) {
+        const nextReview = pendingReviews[0]
+        handleRowClick(nextReview) // Don't await - open immediately
+      } else if (isModalOpen) {
         closeModal()
       }
+      
+      // Background API calls (don't block UI)
+      apiClient.approveReview(reviewId, 'All documents verified. Site approved.')
+        .then(() => {
+          // Silently refresh the list in background
+          return apiClient.getPendingReviews()
+        })
+        .then((response) => {
+          if (response.success && response.data) {
+            setReviews(response.data)
+          }
+        })
+        .catch((err) => {
+          if (err instanceof Error) {
+            setError(err.message)
+          }
+        })
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message)
@@ -161,17 +181,40 @@ export default function SiteRegistrationsPage() {
   const handleRejectConfirm = async (reason: string) => {
     if (rejectReviewId) {
       try {
-        await apiClient.rejectReview(rejectReviewId, reason)
-        // Refresh the list
-        const response = await apiClient.getPendingReviews()
-        if (response.success && response.data) {
-          setReviews(response.data)
-        }
+        // Find next pending review from current state (before API call)
+        const pendingReviews = reviews.filter((r: PendingReview) => 
+          (r.status === 'PENDING_REVIEW' || r.status === 'UNDER_REVIEW') && r.id !== rejectReviewId
+        )
+        
+        // Close reject modal immediately
         setIsRejectModalOpen(false)
+        const currentRejectId = rejectReviewId
         setRejectReviewId(null)
-        if (isModalOpen && selectedReview?.id === rejectReviewId) {
+        
+        // Immediately open next review if available
+        if (pendingReviews.length > 0) {
+          const nextReview = pendingReviews[0]
+          handleRowClick(nextReview) // Don't await - open immediately
+        } else if (isModalOpen) {
           closeModal()
         }
+        
+        // Background API calls (don't block UI)
+        apiClient.rejectReview(currentRejectId, reason)
+          .then(() => {
+            // Silently refresh the list in background
+            return apiClient.getPendingReviews()
+          })
+          .then((response) => {
+            if (response.success && response.data) {
+              setReviews(response.data)
+            }
+          })
+          .catch((err) => {
+            if (err instanceof Error) {
+              setError(err.message)
+            }
+          })
       } catch (err) {
         if (err instanceof Error) {
           setError(err.message)
