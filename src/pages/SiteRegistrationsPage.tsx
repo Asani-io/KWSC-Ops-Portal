@@ -58,6 +58,7 @@ interface SiteReviewDetail {
 export default function SiteRegistrationsPage() {
   const [reviews, setReviews] = useState<PendingReview[]>([])
   const [selectedReview, setSelectedReview] = useState<SiteReviewDetail | null>(null)
+  const [selectedReviewType, setSelectedReviewType] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [rejectReviewId, setRejectReviewId] = useState<string | null>(null)
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false)
@@ -271,6 +272,7 @@ export default function SiteRegistrationsPage() {
     setError(null)
     setEditedData(null)
     setIsEditMode(false)
+    setSelectedReviewType(review.reviewType || null)
 
     try {
       // Fetch full review details
@@ -301,6 +303,7 @@ export default function SiteRegistrationsPage() {
   const closeModal = () => {
     setIsModalOpen(false)
     setSelectedReview(null)
+    setSelectedReviewType(null)
     setEditedData(null)
     setIsEditMode(false)
     // Don't clear areas anymore since we want to keep them cached
@@ -769,15 +772,17 @@ export default function SiteRegistrationsPage() {
                 size="5xl"
                 headerActions={
                   !isEditMode ? (
-                    <button
-                      onClick={handleEditClick}
-                      className="flex items-center space-x-2 px-4 py-2 bg-[#4388BC] text-white rounded-lg text-sm font-medium"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      <span>Edit</span>
-                    </button>
+                    selectedReviewType !== 'CONSUMER_NUMBER_LINKING' && (
+                      <button
+                        onClick={handleEditClick}
+                        className="flex items-center space-x-2 px-4 py-2 bg-[#4388BC] text-white rounded-lg text-sm font-medium"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span>Edit</span>
+                      </button>
+                    )
                   ) : (
                     <div className="flex items-center space-x-2">
                       <button
